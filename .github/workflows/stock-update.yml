@@ -1,0 +1,109 @@
+name: Stock Data Update
+
+on:
+  # تشغيل عند الدفع للبرانش الرئيسي
+  push:
+    branches: [ main, master, my-feature ]
+    paths:
+      - 'data-push/**'
+      - '.github/workflows/stock-update.yml'
+  
+  # تشغيل يدوي
+  workflow_dispatch:
+    inputs:
+      script_name:
+        description: 'Which script to run (inventory.py, historical_inv.py, inventory_history.py)'
+        required: false
+        default: 'inventory.py'
+        type: choice
+        options:
+          - 'inventory.py'
+          - 'historical_inv.py' 
+          - 'inventory_history.py'
+      force_update:
+        description: 'Force update even if no changes'
+        required: false
+        default: false
+        type: boolean
+
+  # تشغيل مجدول (كل يوم في الساعة 2 صباحاً بتوقيت UTC)
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  update-stock:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        else
+          pip install Flask google-cloud-bigquery google-auth python-dotenv
+        fi
+        
+    - name: Set up Google Cloud credentials
+      run: |
+        echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/gcp-key.json"
+        echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp-key.json" >> $GITHUB_ENV
+        
+    - name: Determine script to run
+      id: script
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          SCRIPT="${{ github.event.inputs.script_name }}"
+        else
+          SCRIPT="inventory.py"
+        fi
+        echo "script_name=$SCRIPT" >> $GITHUB_OUTPUT
+        echo "Will run: $SCRIPT"
+        
+    - name: Run stock update
+      run: |
+        cd data-push
+        echo "Running ${{ steps.script.outputs.script_name }}..."
+        python ${{ steps.script.outputs.script_name }}
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+        
+    - name: Notify Flask application
+      if: success()
+      run: |
+        if [ -n "${{ secrets.APP_WEBHOOK_URL }}" ] && [ -n "${{ secrets.STOCK_UPDATE_TOKEN }}" ]; then
+          echo "Notifying Flask application..."
+          curl -X POST "${{ secrets.APP_WEBHOOK_URL }}/api/trigger-stock-update" \
+            -H "Authorization: Bearer ${{ secrets.STOCK_UPDATE_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"source\": \"github-actions\", \"script\": \"${{ steps.script.outputs.script_name }}\", \"timestamp\": \"$(date -Iseconds)\"}" \
+            --max-time 30 \
+            --retry 2 || echo "Failed to notify application (this is not critical)"
+        else
+          echo "Webhook URL or token not configured, skipping notification"
+        fi
+        
+    - name: Upload logs (if failed)
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: error-logs
+        path: |
+          *.log
+          data-push/*.log
+        retention-days: 7
+        
+    - name: Clean up
+      if: always()
+      run: |
+        rm -f gcp-key.json
+        rm -f data-push/gcp-key.json

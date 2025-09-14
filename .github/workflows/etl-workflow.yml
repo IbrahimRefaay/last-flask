@@ -1,0 +1,145 @@
+name: ETL Data Update Workflow
+
+on:
+  # Trigger via repository dispatch from web interface
+  repository_dispatch:
+    types: [trigger-etl]
+  
+  # Also allow manual trigger from GitHub Actions tab
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'ETL trigger source'
+        required: false
+        default: 'manual'
+  
+  # Scheduled trigger (optional - runs daily at 2 AM)
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  etl-update:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-cloud-bigquery google-auth requests python-dotenv
+          
+      - name: Create ETL script
+        run: |
+          cat > etl_script.py << 'EOF'
+          import os
+          import sys
+          from datetime import datetime
+          from google.cloud import bigquery
+          from google.oauth2 import service_account
+          import requests
+          
+          def main():
+              print(f"🚀 ETL Process Started at {datetime.now()}")
+              
+              try:
+                  # Initialize BigQuery client
+                  credentials_info = {
+                      "type": "service_account",
+                      "project_id": "${{ secrets.GCP_PROJECT_ID }}",
+                      "private_key_id": "${{ secrets.GCP_PRIVATE_KEY_ID }}",
+                      "private_key": "${{ secrets.GCP_PRIVATE_KEY }}".replace('\\n', '\n'),
+                      "client_email": "${{ secrets.GCP_CLIENT_EMAIL }}",
+                      "client_id": "${{ secrets.GCP_CLIENT_ID }}",
+                      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                      "token_uri": "https://oauth2.googleapis.com/token",
+                  }
+                  
+                  credentials = service_account.Credentials.from_service_account_info(credentials_info)
+                  client = bigquery.Client(credentials=credentials, project=credentials_info["project_id"])
+                  
+                  print("✅ BigQuery client initialized successfully")
+                  
+                  # Example ETL operations (customize based on your needs)
+                  
+                  # 1. Update inventory snapshot
+                  inventory_query = f"""
+                  INSERT INTO `{credentials_info["project_id"]}.Orders.historical_inventory`
+                  (snapshot_date, product_name, product_barcode, product_category, 
+                   on_hand_quantity, reserved_quantity, available_quantity)
+                  SELECT 
+                      CURRENT_DATE() as snapshot_date,
+                      product_name,
+                      product_barcode, 
+                      product_category,
+                      on_hand_quantity,
+                      reserved_quantity,
+                      available_quantity
+                  FROM `{credentials_info["project_id"]}.Orders.stock_data`
+                  WHERE NOT EXISTS (
+                      SELECT 1 FROM `{credentials_info["project_id"]}.Orders.historical_inventory` h
+                      WHERE h.snapshot_date = CURRENT_DATE() 
+                      AND h.product_barcode = stock_data.Barcode
+                  )
+                  """
+                  
+                  job = client.query(inventory_query)
+                  job.result()  # Wait for completion
+                  print(f"✅ Inventory snapshot updated: {job.num_dml_affected_rows} records")
+                  
+                  # 2. Data quality checks
+                  quality_query = f"""
+                  SELECT 
+                      COUNT(*) as total_records,
+                      COUNT(DISTINCT product_barcode) as unique_products,
+                      MAX(snapshot_date) as latest_date
+                  FROM `{credentials_info["project_id"]}.Orders.historical_inventory`
+                  WHERE snapshot_date = CURRENT_DATE()
+                  """
+                  
+                  results = client.query(quality_query).result()
+                  for row in results:
+                      print(f"📊 Data Quality Report:")
+                      print(f"   Total records: {row.total_records}")
+                      print(f"   Unique products: {row.unique_products}")
+                      print(f"   Latest date: {row.latest_date}")
+                  
+                  print(f"🎉 ETL Process completed successfully at {datetime.now()}")
+                  
+              except Exception as e:
+                  print(f"❌ ETL Process failed: {str(e)}")
+                  sys.exit(1)
+          
+          if __name__ == "__main__":
+              main()
+          EOF
+          
+      - name: Run ETL Process
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_PRIVATE_KEY_ID: ${{ secrets.GCP_PRIVATE_KEY_ID }}
+          GCP_PRIVATE_KEY: ${{ secrets.GCP_PRIVATE_KEY }}
+          GCP_CLIENT_EMAIL: ${{ secrets.GCP_CLIENT_EMAIL }}
+          GCP_CLIENT_ID: ${{ secrets.GCP_CLIENT_ID }}
+        run: |
+          python etl_script.py
+          
+      - name: Notify completion
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ ETL workflow completed successfully"
+          else
+            echo "❌ ETL workflow failed"
+          fi
+          
+      - name: Clean up
+        if: always()
+        run: |
+          rm -f etl_script.py

@@ -1,0 +1,683 @@
+{% extends 'base.html' %}
+
+{% block title %}صفحة المنتجات{% endblock %}
+
+{% block header_title %}<i class="fas fa-cubes"></i> صفحة المنتجات{% endblock %}
+
+{% block header_subtitle %}أهم 10 منتجات ومخزونها اليومي{% endblock %}
+
+{% block content %}
+<div class="mt-4">
+    
+    <!-- Date Filter Section -->
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 10px; margin-bottom: 30px; color: white;">
+        <h3 style="margin-bottom: 15px; display: flex; align-items: center;">
+            <i class="fas fa-calendar-alt" style="margin-left: 10px;"></i>
+            فلترة البيانات حسب التاريخ
+        </h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+            <label for="dateFilter" style="font-weight: bold;">اختر الفترة الزمنية:</label>
+            <select id="dateFilter" onchange="changeFilter()" style="padding: 8px 12px; border: none; border-radius: 5px; background: white; color: #333; font-weight: bold;">
+                <option value="yesterday" {{ 'selected' if current_filter == 'yesterday' else '' }}>أمس (آخر يوم بالبيانات)</option>
+                <option value="today" {{ 'selected' if current_filter == 'today' else '' }}>اليوم</option>
+                <option value="last_7_days" {{ 'selected' if current_filter == 'last_7_days' else '' }}>آخر 7 أيام</option>
+                <option value="last_30_days" {{ 'selected' if current_filter == 'last_30_days' else '' }}>آخر 30 يوم</option>
+                <option value="current_month" {{ 'selected' if current_filter == 'current_month' else '' }}>الشهر الحالي</option>
+                <option value="all" {{ 'selected' if current_filter == 'all' else '' }}>جميع البيانات</option>
+            </select>
+            <span id="dataInfo" style="font-size: 14px; opacity: 0.9;">
+                {% if latest_date %}
+                    آخر تحديث للمخزون: {{ latest_date }}
+                {% else %}
+                    جاري تحميل تاريخ آخر تحديث...
+                {% endif %}
+            </span>
+            <button onclick="refreshData()" style="padding: 8px 15px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 5px; cursor: pointer;">
+                <i class="fas fa-sync-alt"></i> تحديث البيانات
+            </button>
+        </div>
+    </div>
+    
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" style="display: none; text-align: center; padding: 20px;">
+        <div style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite; margin: 0 auto;"></div>
+        <p style="margin-top: 10px;">جاري التحميل...</p>
+    </div>
+
+    <!-- Warning Cards Container -->
+    <div id="warningCardsContainer" style="margin-bottom: 30px; display: none;">
+        <h3 style="color: #e74c3c; margin-bottom: 15px;">
+            <i class="fas fa-exclamation-triangle"></i> تحذير: منتجات منخفضة المخزون
+        </h3>
+        <div id="warningCards" style="display: flex; flex-wrap: wrap; gap: 15px;"></div>
+    </div>
+
+    <!-- Top 10 Products Table (Loads immediately) -->
+    <h2 style="color: #2c3e50; margin-bottom: 20px;">
+        <i class="fas fa-trophy"></i> أهم 10 منتجات (حسب قيمة المبيعات)
+        <span id="filterBadge" style="background: #3498db; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 10px;">
+            {{ current_filter|replace('yesterday', 'أمس')|replace('today', 'اليوم')|replace('last_7_days', 'آخر 7 أيام')|replace('last_30_days', 'آخر 30 يوم')|replace('current_month', 'الشهر الحالي')|replace('all', 'جميع البيانات') }}
+        </span>
+    </h2>
+    <div class="table-container">
+        <table class="table table-bordered table-striped">
+            <thead style="background-color: #3498db; color: white;">
+                <tr>
+                    <th>اسم المنتج</th>
+                    <th>الباركود</th>
+                    <th>عدد مرات البيع</th>
+                    <th>إجمالي الكمية</th>
+                    <th>إجمالي قيمة المبيعات</th>
+                    <th>أول بيعة</th>
+                    <th>آخر بيعة</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody id="topProductsTableBody">
+                {% for p in top_products %}
+                <tr>
+                    <td>{{ p.product_name }}</td>
+                    <td>{{ p.product_barcode }}</td>
+                    <td>{{ p.sales_count }}</td>
+                    <td>{{ p.total_quantity }}</td>
+                    <td>{{ "%.2f"|format(p.total_sales_value) }} ريال</td>
+                    <td>{{ p.first_sale_date or 'N/A' }}</td>
+                    <td>{{ p.last_sale_date or 'N/A' }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info" onclick="loadProductDetails('{{ p.product_barcode }}')">
+                            <i class="fas fa-info-circle"></i> تفاصيل
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Load More Data Buttons -->
+    <div style="margin: 30px 0; text-align: center;">
+        <button id="loadCategoryBtn" class="btn btn-primary" onclick="loadCategoryData()" style="margin: 5px;">
+            <i class="fas fa-layer-group"></i> تحميل المنتجات حسب الفئة
+        </button>
+        <button id="loadInventoryBtn" class="btn btn-success" onclick="loadInventoryData()" style="margin: 5px;">
+            <i class="fas fa-warehouse"></i> تحميل معلومات المخزون
+        </button>
+        <button id="loadChartBtn" class="btn btn-warning" onclick="loadChartData()" style="margin: 5px;">
+            <i class="fas fa-chart-line"></i> تحميل الرسم البياني
+        </button>
+        <button class="btn btn-secondary" onclick="clearCache()" style="margin: 5px;">
+            <i class="fas fa-refresh"></i> مسح الذاكرة المؤقتة
+        </button>
+    </div>
+
+    <!-- Category Products Table (Loads on demand) -->
+    <div id="categorySection" style="display: none;">
+        <h2 style="color: #2c3e50; margin: 30px 0 20px 0;">أهم 10 منتجات (حسب الفئة)</h2>
+        <div class="table-container">
+            <table class="table table-bordered table-striped">
+                <thead style="background-color: #9b59b6; color: white;">
+                    <tr>
+                        <th>الفئة الرئيسية</th>
+                        <th>اسم المنتج</th>
+                        <th>الباركود</th>
+                        <th>عدد مرات البيع</th>
+                        <th>إجمالي الكمية</th>
+                        <th>أول بيعة</th>
+                        <th>آخر بيعة</th>
+                    </tr>
+                </thead>
+                <tbody id="categoryTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Product Inventory Information (Loads on demand) -->
+    <div id="inventorySection" style="display: none;">
+        <h2 style="color: #2c3e50; margin: 30px 0 20px 0;">معلومات المخزون</h2>
+        <div style="margin-bottom: 15px;">
+            <label for="snapshotDateFilter" style="font-weight: bold; color: #27ae60;">اختر يوم الجرد:</label>
+            <select id="snapshotDateFilter" style="padding: 6px 12px; border-radius: 5px; border: 1px solid #27ae60; font-weight: bold;">
+                <option value="">جاري التحميل...</option>
+            </select>
+        </div>
+        <div class="table-container">
+            <table class="table table-bordered table-striped">
+                <thead style="background-color: #27ae60; color: white;">
+                    <tr>
+                        <th>اسم المنتج</th>
+                        <th>الباركود</th>
+                        <th>الفئة</th>
+                        <th>الكمية المتاحة</th>
+                        <th>الكمية المحجوزة</th>
+                        <th>الكمية المتوفرة</th>
+                        <th>تاريخ البيانات</th>
+                        <th>تكلفة الوحدة</th>
+                        <th>إجمالي التكلفة</th>
+                    </tr>
+                </thead>
+                <tbody id="inventoryTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Interactive Chart Section (Loads on demand) -->
+    <div id="chartSection" style="display: none;">
+        <h2 style="color: #2c3e50; margin: 30px 0 20px 0;">رسم بياني تفاعلي لحركة المخزون</h2>
+        <div class="filter-group" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center;">
+            <label for="productFilter" style="font-weight: bold;">اختر المنتج:</label>
+            <select id="productFilter" style="padding: 8px; margin-right: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="all">جميع المنتجات</option>
+                {% for p in top_products %}
+                <option value="{{ p.product_barcode }}">{{ p.product_name }}</option>
+                {% endfor %}
+            </select>
+            
+            <label for="chartDays" style="font-weight: bold;">عدد الأيام:</label>
+            <select id="chartDays" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="7">آخر 7 أيام</option>
+                <option value="15">آخر 15 يوم</option>
+                <option value="30" selected>آخر 30 يوم</option>
+                <option value="60">آخر 60 يوم</option>
+            </select>
+            
+            <button onclick="updateChart()" style="padding: 8px 15px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                <i class="fas fa-chart-line"></i> تحديث الرسم
+            </button>
+        </div>
+        
+        <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
+            <canvas id="stockChart" width="900" height="400"></canvas>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.btn {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+}
+
+.btn-primary { background-color: #3498db; color: white; }
+.btn-success { background-color: #27ae60; color: white; }
+.btn-warning { background-color: #f39c12; color: white; }
+.btn-secondary { background-color: #95a5a6; color: white; }
+.btn-info { background-color: #2980b9; color: white; }
+.btn-sm { padding: 4px 8px; font-size: 12px; }
+
+.btn:hover { opacity: 0.8; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let stockData = [];
+    let chartInstance = null;
+    let loadedSections = {
+        category: false,
+        inventory: false,
+        chart: false
+    };
+    let currentFilter = '{{ current_filter }}';
+
+    function showLoading() {
+        document.getElementById('loadingSpinner').style.display = 'block';
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingSpinner').style.display = 'none';
+    }
+
+    function disableButton(buttonId) {
+        const btn = document.getElementById(buttonId);
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+        }
+    }
+
+    function enableButton(buttonId, originalText) {
+        const btn = document.getElementById(buttonId);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    function changeFilter() {
+        const filterSelect = document.getElementById('dateFilter');
+        const newFilter = filterSelect.value;
+        
+        if (newFilter !== currentFilter) {
+            currentFilter = newFilter;
+            refreshData();
+            
+            // Reset loaded sections to force reload with new filter
+            loadedSections = { category: false, inventory: false, chart: false };
+            
+            // Hide all sections
+            document.getElementById('categorySection').style.display = 'none';
+            document.getElementById('inventorySection').style.display = 'none';
+            document.getElementById('chartSection').style.display = 'none';
+            document.getElementById('warningCardsContainer').style.display = 'none';
+            
+            // Reset button texts
+            enableButton('loadCategoryBtn', '<i class="fas fa-layer-group"></i> تحميل المنتجات حسب الفئة');
+            enableButton('loadInventoryBtn', '<i class="fas fa-warehouse"></i> تحميل معلومات المخزون');
+            enableButton('loadChartBtn', '<i class="fas fa-chart-line"></i> تحميل الرسم البياني');
+        }
+    }
+
+    function refreshData() {
+        showLoading();
+        
+        fetch(`/api/products/refresh?date_filter=${currentFilter}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Update the table with new data
+                const tbody = document.getElementById('topProductsTableBody');
+                tbody.innerHTML = '';
+                
+                data.top_products.forEach(p => {
+                    const row = `
+                        <tr>
+                            <td>${p.product_name || ''}</td>
+                            <td>${p.product_barcode || ''}</td>
+                            <td>${p.sales_count || 0}</td>
+                            <td>${p.total_quantity || 0}</td>
+                            <td>${parseFloat(p.total_sales_value || 0).toFixed(2)} ريال</td>
+                            <td>${p.first_sale_date || 'N/A'}</td>
+                            <td>${p.last_sale_date || 'N/A'}</td>
+                            <td>
+                                <button class="btn btn-sm btn-info" onclick="loadProductDetails('${p.product_barcode}')">
+                                    <i class="fas fa-info-circle"></i> تفاصيل
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+                
+                // Update filter badge
+                const filterNames = {
+                    'yesterday': 'أمس',
+                    'today': 'اليوم', 
+                    'last_7_days': 'آخر 7 أيام',
+                    'last_30_days': 'آخر 30 يوم',
+                    'current_month': 'الشهر الحالي',
+                    'all': 'جميع البيانات'
+                };
+                
+                document.getElementById('filterBadge').textContent = filterNames[currentFilter] || currentFilter;
+                
+                // Update data info
+                updateDataInfo();
+            })
+            .catch(error => {
+                console.error('Error refreshing data:', error);
+                alert('خطأ في تحديث البيانات: ' + error.message);
+            })
+            .finally(() => {
+                hideLoading();
+            });
+    }
+
+    function updateDataInfo() {
+        fetch('/api/products/latest-date')
+            .then(response => response.json())
+            .then(data => {
+                const infoSpan = document.getElementById('dataInfo');
+                if (data.latest_date) {
+                    infoSpan.textContent = `آخر تحديث للمخزون: ${data.latest_date}`;
+                } else {
+                    infoSpan.textContent = 'لا توجد معلومات عن تاريخ آخر تحديث';
+                }
+            })
+            .catch(error => {
+                console.error('Error getting latest date:', error);
+            });
+    }
+
+    function loadCategoryData() {
+        if (loadedSections.category) {
+            document.getElementById('categorySection').style.display = 'block';
+            return;
+        }
+
+        disableButton('loadCategoryBtn');
+        showLoading();
+
+        fetch(`/api/products/category?date_filter=${currentFilter}`)
+            .then(response => response.json())
+            .then(data => {
+                const tbody = document.getElementById('categoryTableBody');
+                tbody.innerHTML = '';
+                
+                data.forEach(p => {
+                    const row = `
+                        <tr>
+                            <td><span style="background: #9b59b6; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${p.main_category || ''}</span></td>
+                            <td>${p.product_name || ''}</td>
+                            <td>${p.product_barcode || ''}</td>
+                            <td>${p.sales_count || 0}</td>
+                            <td>${p.total_quantity || 0}</td>
+                            <td>${parseFloat(p.total_sales_value || 0).toFixed(2)} ريال</td>
+                            <td>${p.first_sale_date || 'N/A'}</td>
+                            <td>${p.last_sale_date || 'N/A'}</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+                
+                document.getElementById('categorySection').style.display = 'block';
+                loadedSections.category = true;
+                enableButton('loadCategoryBtn', '<i class="fas fa-layer-group"></i> إخفاء المنتجات حسب الفئة');
+            })
+            .catch(error => {
+                console.error('Error loading category data:', error);
+                alert('خطأ في تحميل البيانات');
+                enableButton('loadCategoryBtn', '<i class="fas fa-layer-group"></i> تحميل المنتجات حسب الفئة');
+            })
+            .finally(() => {
+                hideLoading();
+            });
+    }
+
+    function loadInventoryData() {
+        if (loadedSections.inventory) {
+            document.getElementById('inventorySection').style.display = 'block';
+            document.getElementById('warningCardsContainer').style.display = 'block';
+            return;
+        }
+
+        disableButton('loadInventoryBtn');
+        showLoading();
+
+        // Get barcodes from top products
+        const barcodes = JSON.parse('{{ top_products|map(attribute="product_barcode")|list|tojson|safe }}');
+        const inventoryBarcodesParam = barcodes.slice(0, 10).join(','); // Limit to 10
+
+        // Load available snapshot dates for the dropdown
+        fetch('/api/products/inventory-dates')
+            .then(response => response.json())
+            .then(data => {
+                const dateSelect = document.getElementById('snapshotDateFilter');
+                dateSelect.innerHTML = '';
+                if (data.dates && data.dates.length > 0) {
+                    data.dates.forEach(date => {
+                        const opt = document.createElement('option');
+                        opt.value = date;
+                        opt.textContent = date;
+                        dateSelect.appendChild(opt);
+                    });
+                    // Load inventory for the latest date by default
+                    loadInventoryForDate(data.dates[0]);
+                } else {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = 'لا توجد تواريخ متاحة';
+                    dateSelect.appendChild(opt);
+                }
+                // Add event listener for changing date
+                dateSelect.onchange = function() {
+                    loadInventoryForDate(this.value);
+                };
+            })
+            .catch(error => {
+                alert('خطأ في تحميل تواريخ الجرد');
+                hideLoading();
+            });
+    }
+
+    function loadInventoryForDate(snapshotDate) {
+        // Get barcodes from top products
+        const barcodes = JSON.parse('{{ top_products|map(attribute="product_barcode")|list|tojson|safe }}');
+        const inventoryBarcodesParam = barcodes.slice(0, 10).join(',');
+
+        fetch(`/api/products/inventory?barcodes=${inventoryBarcodesParam}&snapshot_date=${snapshotDate}`)
+            .then(response => response.json())
+            .then(data => {
+                // Load inventory table
+                const tbody = document.getElementById('inventoryTableBody');
+                tbody.innerHTML = '';
+                
+                data.products_info.forEach(info => {
+                    const qty = info['Qty On Hand'] || info['on_hand_quantity'] || 0;
+                    const isLowStock = qty && parseFloat(qty) < 10;
+                    const snapshotDate = info['snapshot_date'] || 'N/A';
+                    
+                    const row = `
+                        <tr ${isLowStock ? 'style="background-color: #ffebee;"' : ''}>
+                            <td>${info['Product Name'] || info['product_name'] || ''}</td>
+                            <td>${info['Barcode'] || info['product_barcode'] || ''}</td>
+                            <td>${info['Category'] || info['product_category'] || ''}</td>
+                            <td ${isLowStock ? 'style="color: #e74c3c; font-weight: bold;"' : ''}>${qty || ''}</td>
+                            <td>${info['Reserved Qty'] || info['reserved_quantity'] || ''}</td>
+                            <td>${info['Available Qty'] || info['available_quantity'] || ''}</td>
+                            <td><span style="background: #f39c12; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${snapshotDate}</span></td>
+                            <td>${info['Unit Cost'] || info['unit_cost'] || ''}</td>
+                            <td>${info['Total Cost'] || info['total_cost'] || ''}</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+
+                // Load warning cards
+                const warningContainer = document.getElementById('warningCards');
+                warningContainer.innerHTML = '';
+                
+                if (data.warning_products.length > 0) {
+                    data.warning_products.forEach(warning => {
+                        const card = `
+                            <div style="background: linear-gradient(135deg, #ff6b6b, #ee5a24); color: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); min-width: 250px;">
+                                <h4 style="margin: 0 0 8px 0; font-size: 16px;">${warning.name}</h4>
+                                <p style="margin: 0; font-size: 12px; opacity: 0.9;">باركود: ${warning.barcode}</p>
+                                <p style="margin: 5px 0 0 0; font-weight: bold;">المخزون المتبقي: ${warning.quantity}</p>
+                                <p style="margin: 3px 0 0 0; font-size: 11px; opacity: 0.8;">تاريخ البيانات: ${warning.snapshot_date || 'N/A'}</p>
+                            </div>
+                        `;
+                        warningContainer.innerHTML += card;
+                    });
+                    document.getElementById('warningCardsContainer').style.display = 'block';
+                }
+                
+                document.getElementById('inventorySection').style.display = 'block';
+                loadedSections.inventory = true;
+                enableButton('loadInventoryBtn', '<i class="fas fa-warehouse"></i> إخفاء معلومات المخزون');
+            })
+            .catch(error => {
+                console.error('Error loading inventory data:', error);
+                alert('خطأ في تحميل بيانات الجرد');
+                enableButton('loadInventoryBtn', '<i class="fas fa-warehouse"></i> تحميل معلومات المخزون');
+            })
+            .finally(() => {
+                hideLoading();
+            });
+    }
+
+    function loadChartData() {
+        if (loadedSections.chart) {
+            document.getElementById('chartSection').style.display = 'block';
+            return;
+        }
+
+        disableButton('loadChartBtn');
+        showLoading();
+
+        // Get first 5 barcodes for performance
+        const barcodes = JSON.parse('{{ top_products|map(attribute="product_barcode")|list|tojson|safe }}');
+        const barcodesParam = barcodes.slice(0, 5).join(',');
+        const days = document.getElementById('chartDays') ? document.getElementById('chartDays').value : 30;
+
+        fetch(`/api/products/stock-history?barcodes=${barcodesParam}&days=${days}`)
+            .then(response => response.json())
+            .then(data => {
+                stockData = data;
+                document.getElementById('chartSection').style.display = 'block';
+                updateChart();
+                loadedSections.chart = true;
+                enableButton('loadChartBtn', '<i class="fas fa-chart-line"></i> إخفاء الرسم البياني');
+            })
+            .catch(error => {
+                console.error('Error loading chart data:', error);
+                alert('خطأ في تحميل البيانات');
+                enableButton('loadChartBtn', '<i class="fas fa-chart-line"></i> تحميل الرسم البياني');
+            })
+            .finally(() => {
+                hideLoading();
+            });
+    }
+
+    function loadProductDetails(barcode) {
+        alert(`تحميل تفاصيل المنتج: ${barcode}`);
+        // يمكن إضافة modal أو صفحة منفصلة هنا
+    }
+
+    function clearCache() {
+        showLoading();
+        fetch('/api/clear-cache')
+            .then(response => response.json())
+            .then(data => {
+                alert('تم مسح الذاكرة المؤقتة بنجاح');
+                // Reset loaded sections
+                loadedSections = { category: false, inventory: false, chart: false };
+                
+                // Hide all sections
+                document.getElementById('categorySection').style.display = 'none';
+                document.getElementById('inventorySection').style.display = 'none';
+                document.getElementById('chartSection').style.display = 'none';
+                document.getElementById('warningCardsContainer').style.display = 'none';
+                
+                // Reset button texts
+                enableButton('loadCategoryBtn', '<i class="fas fa-layer-group"></i> تحميل المنتجات حسب الفئة');
+                enableButton('loadInventoryBtn', '<i class="fas fa-warehouse"></i> تحميل معلومات المخزون');
+                enableButton('loadChartBtn', '<i class="fas fa-chart-line"></i> تحميل الرسم البياني');
+            })
+            .catch(error => {
+                console.error('Error clearing cache:', error);
+                alert('خطأ في مسح الذاكرة المؤقتة');
+            })
+            .finally(() => {
+                hideLoading();
+            });
+    }
+
+    function updateChart() {
+        if (stockData.length === 0) {
+            return;
+        }
+
+        const filterBarcode = document.getElementById('productFilter').value;
+        
+        // Filter data
+        let filteredData = stockData;
+        if (filterBarcode !== 'all') {
+            filteredData = stockData.filter(d => d.product_barcode === filterBarcode);
+        }
+        
+        if (filteredData.length === 0) {
+            // Clear chart if no data
+            if (chartInstance) {
+                chartInstance.destroy();
+                chartInstance = null;
+            }
+            return;
+        }
+        
+        // Group data by product
+        const productGroups = {};
+        filteredData.forEach(d => {
+            if (!productGroups[d.product_barcode]) {
+                productGroups[d.product_barcode] = {
+                    label: d.product_name || d.product_barcode,
+                    data: [],
+                    dates: []
+                };
+            }
+            productGroups[d.product_barcode].data.push(d.on_hand_quantity);
+            productGroups[d.product_barcode].dates.push(d.snapshot_date);
+        });
+        
+        // Prepare chart data
+        const labels = [...new Set(filteredData.map(d => d.snapshot_date))].sort();
+        const datasets = [];
+        const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6'];
+        
+        let colorIndex = 0;
+        Object.keys(productGroups).forEach(barcode => {
+            const group = productGroups[barcode];
+            const color = colors[colorIndex % colors.length];
+            
+            // Create data points for all dates
+            const dataPoints = labels.map(date => {
+                const index = group.dates.indexOf(date);
+                return index !== -1 ? group.data[index] : null;
+            });
+            
+            datasets.push({
+                label: group.label,
+                data: dataPoints,
+                borderColor: color,
+                backgroundColor: color + '20',
+                fill: false,
+                tension: 0.1,
+                pointRadius: 3,
+                pointHoverRadius: 5
+            });
+            
+            colorIndex++;
+        });
+        
+        // Destroy existing chart
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+        
+        // Create new chart
+        const ctx = document.getElementById('stockChart').getContext('2d');
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `حركة المخزون اليومية (آخر ${document.getElementById('chartDays') ? document.getElementById('chartDays').value : 30} يوم)`,
+                        font: { size: 16, family: 'Cairo' }
+                    },
+                    legend: { display: true, position: 'top' }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'الكمية المتاحة' }
+                    },
+                    x: {
+                        title: { display: true, text: 'التاريخ' }
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

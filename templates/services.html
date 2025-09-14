@@ -1,0 +1,984 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="dashboard-bg">
+    <!-- Header Section -->
+    <div class="services-header">
+        <div class="header-content">
+            <h1><i class="fas fa-concierge-bell"></i> تحليل الخدمات</h1>
+            <p>عرض تفصيلي للخدمات المقدمة والمرتجعات (باستثناء عربون طلب بضاعة ودفع مسبق منتجات البدائع)</p>
+        </div>
+        <div class="back-button-container">
+            <button onclick="goBack()" class="btn-primary back-btn">
+                <i class="fas fa-arrow-left"></i> العودة للرئيسية
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="filters-section">
+        <div class="filters-container">
+            <div class="filter-group">
+                <label for="servicesFromDate">من تاريخ:</label>
+                <input type="date" id="servicesFromDate" class="filter-input">
+            </div>
+            <div class="filter-group">
+                <label for="servicesToDate">إلى تاريخ:</label>
+                <input type="date" id="servicesToDate" class="filter-input">
+            </div>
+            <div class="filter-group">
+                <label for="servicesBranchFilter">الفرع:</label>
+                <select id="servicesBranchFilter" class="filter-select">
+                    <option value="">جميع الفروع</option>
+                    <option value="فرع الملقا">فرع الملقا</option>
+                    <option value="فرع النهضة">فرع النهضة</option>
+                    <option value="فرع البديعة">فرع البديعة</option>
+                    <option value="فرع النسيم">فرع النسيم</option>
+                    <option value="المتجر الالكتروني">المتجر الالكتروني</option>
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button onclick="applyFilters()" class="btn-primary">
+                    <i class="fas fa-filter"></i> تطبيق الفلاتر
+                </button>
+                <button onclick="resetFilters()" class="btn-secondary">
+                    <i class="fas fa-refresh"></i> إعادة تعيين
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-cards" id="services-summary">
+        <div class="summary-card">
+            <div class="summary-icon">
+                <i class="fas fa-concierge-bell"></i>
+            </div>
+            <div class="summary-content">
+                <h3 id="total-services-amount">0 ريال</h3>
+                <p>إجمالي قيمة الخدمات</p>
+            </div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-icon">
+                <i class="fas fa-list-ol"></i>
+            </div>
+            <div class="summary-content">
+                <h3 id="total-services-quantity">0</h3>
+                <p>إجمالي كمية الخدمات</p>
+            </div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-icon">
+                <i class="fas fa-receipt"></i>
+            </div>
+            <div class="summary-content">
+                <h3 id="total-services-receipts">0</h3>
+                <p>عدد الفواتير</p>
+            </div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-icon">
+                <i class="fas fa-undo"></i>
+            </div>
+            <div class="summary-content">
+                <h3 id="total-returns-amount">0 ريال</h3>
+                <p>قيمة المرتجعات</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Services Table -->
+    <div class="services-section">
+        <div class="section-header">
+            <h2><i class="fas fa-concierge-bell"></i> بيانات الخدمات</h2>
+            
+            <!-- فلاتر خاصة بجدول الخدمات -->
+            <div class="table-filters">
+                <div class="filter-row">
+                    <div class="filter-group-inline">
+                        <label>فلتر الخدمة:</label>
+                        <input type="text" id="services-filter" placeholder="ابحث في اسم الخدمة..." class="filter-input-inline" oninput="applyServicesTableFilters()">
+                    </div>
+                    <div class="filter-group-inline">
+                        <label>فلتر الفئة:</label>
+                        <select id="services-category-filter" class="filter-select-inline">
+                            <option value="">جميع الفئات</option>
+                        </select>
+                    </div>
+                    <div class="filter-group-inline">
+                        <label>فلتر الفرع:</label>
+                        <select id="services-branch-filter-table" class="filter-select-inline">
+                            <option value="">جميع الفروع</option>
+                        </select>
+                    </div>
+                    <button onclick="applyServicesTableFilters()" class="btn-filter">
+                        <i class="fas fa-filter"></i> فلترة
+                    </button>
+                    <button onclick="clearServicesTableFilters()" class="btn-clear">
+                        <i class="fas fa-times"></i> مسح
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="table-container">
+            <div id="services-loading" class="loading-container" style="display: none;">
+                <div class="loader"></div>
+                <p>جاري تحميل بيانات الخدمات...</p>
+            </div>
+            <div id="services-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>اسم الخدمة</th>
+                            <th>فئة الخدمة</th>
+                            <th>الفرع</th>
+                            <th>الكمية</th>
+                            <th>إجمالي المبلغ</th>
+                            <th>عدد الفواتير</th>
+                        </tr>
+                    </thead>
+                    <tbody id="services-table-body">
+                        <!-- Services data will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Returns Table -->
+    <div class="returns-section">
+        <div class="section-header">
+            <h2><i class="fas fa-undo"></i> مرتجعات الخدمات</h2>
+            
+            <!-- فلاتر خاصة بجدول المرتجعات -->
+            <div class="table-filters">
+                <div class="filter-row">
+                    <div class="filter-group-inline">
+                        <label>فلتر الخدمة:</label>
+                        <input type="text" id="returns-filter" placeholder="ابحث في اسم الخدمة..." class="filter-input-inline" oninput="applyReturnsTableFilters()">
+                    </div>
+                    <div class="filter-group-inline">
+                        <label>فلتر الفئة:</label>
+                        <select id="returns-category-filter" class="filter-select-inline">
+                            <option value="">جميع الفئات</option>
+                        </select>
+                    </div>
+                    <div class="filter-group-inline">
+                        <label>فلتر الفرع:</label>
+                        <select id="returns-branch-filter-table" class="filter-select-inline">
+                            <option value="">جميع الفروع</option>
+                        </select>
+                    </div>
+                    <button onclick="applyReturnsTableFilters()" class="btn-filter">
+                        <i class="fas fa-filter"></i> فلترة
+                    </button>
+                    <button onclick="clearReturnsTableFilters()" class="btn-clear">
+                        <i class="fas fa-times"></i> مسح
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="table-container">
+            <div id="returns-loading" class="loading-container" style="display: none;">
+                <div class="loader"></div>
+                <p>جاري تحميل بيانات المرتجعات...</p>
+            </div>
+            <div id="returns-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>اسم الخدمة</th>
+                            <th>فئة الخدمة</th>
+                            <th>الفرع</th>
+                            <th>الكمية المرتجعة</th>
+                            <th>قيمة المرتجعات</th>
+                            <th>عدد فواتير الإرجاع</th>
+                        </tr>
+                    </thead>
+                    <tbody id="returns-table-body">
+                        <!-- Returns data will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.services-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+    color: white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.header-content h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.header-content p {
+    margin: 10px 0 0 0;
+    opacity: 0.9;
+    font-size: 1.1rem;
+}
+
+.back-btn {
+    padding: 12px 24px;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.back-btn:hover {
+    background: rgba(255,255,255,0.3);
+    border-color: rgba(255,255,255,0.5);
+}
+
+.filters-section {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+}
+
+.filters-container {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.filter-group label {
+    font-weight: bold;
+    color: #333;
+    font-size: 0.9rem;
+}
+
+.filter-input, .filter-select {
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: border-color 0.3s;
+    min-width: 150px;
+}
+
+.filter-input:focus, .filter-select:focus {
+    border-color: #667eea;
+    outline: none;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-primary, .btn-secondary {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background: #667eea;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #5a6fd8;
+}
+
+.btn-secondary {
+    background: #f8f9fa;
+    color: #333;
+    border: 2px solid #ddd;
+}
+
+.btn-secondary:hover {
+    background: #e9ecef;
+}
+
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.summary-card {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.summary-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+}
+
+.summary-content h3 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #333;
+}
+
+.summary-content p {
+    margin: 5px 0 0 0;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.services-section, .returns-section {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+}
+
+.section-header {
+    padding: 20px;
+    border-bottom: 2px solid #f8f9fa;
+}
+
+.section-header h2 {
+    margin: 0 0 15px 0;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.table-filters {
+    margin-top: 15px;
+}
+
+.filter-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.filter-group-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-group-inline label {
+    font-weight: bold;
+    color: #555;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.filter-input-inline, .filter-select-inline {
+    padding: 8px 12px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    min-width: 150px;
+    transition: border-color 0.3s;
+}
+
+.filter-input-inline:focus, .filter-select-inline:focus {
+    border-color: #667eea;
+    outline: none;
+}
+
+.btn-filter, .btn-clear {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.3s;
+}
+
+.btn-filter {
+    background: #667eea;
+    color: white;
+}
+
+.btn-filter:hover {
+    background: #5a6fd8;
+}
+
+.btn-clear {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-clear:hover {
+    background: #c82333;
+}
+
+.total-row {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
+    font-weight: bold !important;
+    border-top: 3px solid #1976d2 !important;
+    border-bottom: 2px solid #1976d2 !important;
+    box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2) !important;
+}
+
+.total-row td {
+    background: transparent !important;
+    color: #0d47a1 !important;
+    font-weight: bold !important;
+    font-size: 1.1em !important;
+    padding: 18px 15px !important;
+    border-left: 1px solid #64b5f6;
+    border-right: 1px solid #64b5f6;
+}
+
+.total-row:hover {
+    background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%) !important;
+    transform: scale(1.01);
+    transition: all 0.3s ease;
+}
+
+.total-row td:first-child {
+    text-align: center !important;
+    font-size: 1.2em !important;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.data-table th {
+    background: #f8f9fa;
+    padding: 15px;
+    text-align: right;
+    font-weight: bold;
+    border-bottom: 2px solid #dee2e6;
+    color: #333;
+}
+
+.data-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #dee2e6;
+    text-align: right;
+}
+
+.data-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.loading-container {
+    text-align: center;
+    padding: 50px;
+}
+
+.loader {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.no-data {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+
+.no-data i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    color: #ddd;
+}
+
+@media (max-width: 768px) {
+    .services-header {
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .filters-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-group {
+        width: 100%;
+    }
+
+    .filter-input, .filter-select {
+        width: 100%;
+    }
+
+    .summary-cards {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // تطبيق الفلاتر الحالية إذا كانت موجودة
+    applyCurrentFilters();
+    
+    // تحميل قوائم الفروع والفئات
+    loadBranchesAndCategories();
+    
+    // تحميل البيانات الأولية
+    loadServicesData();
+    loadReturnsData();
+});
+
+// متغيرات لحفظ البيانات الأصلية
+let originalServicesData = [];
+let originalReturnsData = [];
+
+function loadBranchesAndCategories() {
+    // تحميل الفروع
+    fetch('/api/services-branches')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const branchSelects = [
+                    document.getElementById('servicesBranchFilter'),
+                    document.getElementById('services-branch-filter-table'),
+                    document.getElementById('returns-branch-filter-table')
+                ];
+                
+                branchSelects.forEach(select => {
+                    if (select) {
+                        // مسح الخيارات الموجودة ما عدا "جميع الفروع"
+                        while (select.options.length > 1) {
+                            select.remove(1);
+                        }
+                        
+                        // إضافة الفروع الجديدة
+                        data.branches.forEach(branch => {
+                            const option = document.createElement('option');
+                            option.value = branch;
+                            option.textContent = branch;
+                            select.appendChild(option);
+                        });
+                    }
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error loading branches:', error);
+        });
+}
+
+function applyCurrentFilters() {
+    // الحصول على الفلاتر من URL إذا كانت موجودة
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    const fromDate = urlParams.get('start_date') || urlParams.get('fromDate');
+    const toDate = urlParams.get('end_date') || urlParams.get('toDate'); 
+    const branch = urlParams.get('branch') || urlParams.get('branchFilter');
+    
+    if (fromDate) {
+        document.getElementById('servicesFromDate').value = fromDate;
+    }
+    if (toDate) {
+        document.getElementById('servicesToDate').value = toDate;
+    }
+    if (branch) {
+        document.getElementById('servicesBranchFilter').value = branch;
+    }
+}
+
+function getFilterParams() {
+    const fromDate = document.getElementById('servicesFromDate').value;
+    const toDate = document.getElementById('servicesToDate').value;
+    const branch = document.getElementById('servicesBranchFilter').value;
+    
+    const params = new URLSearchParams();
+    if (fromDate) params.append('start_date', fromDate);
+    if (toDate) params.append('end_date', toDate);
+    if (branch) params.append('branch', branch);
+    
+    return params.toString() ? '?' + params.toString() : '';
+}
+
+function applyFilters() {
+    loadServicesData();
+    loadReturnsData();
+}
+
+function resetFilters() {
+    document.getElementById('servicesFromDate').value = '';
+    document.getElementById('servicesToDate').value = '';
+    document.getElementById('servicesBranchFilter').value = '';
+    
+    loadServicesData();
+    loadReturnsData();
+}
+
+function loadServicesData() {
+    const loadingElement = document.getElementById('services-loading');
+    const tableContainer = document.getElementById('services-table-container');
+    const tableBody = document.getElementById('services-table-body');
+    
+    loadingElement.style.display = 'block';
+    tableContainer.style.display = 'none';
+    
+    const filterParams = getFilterParams();
+    
+    fetch(`/api/services-data${filterParams}`)
+        .then(response => {
+            console.log('🔍 Services API URL:', `/api/services-data${filterParams}`);
+            return response.json();
+        })
+        .then(data => {
+            loadingElement.style.display = 'none';
+            tableContainer.style.display = 'block';
+            
+            if (data.status === 'success') {
+                updateServicesSummary(data.summary);
+                displayServicesTable(data.services);
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="6" class="no-data"><i class="fas fa-exclamation-triangle"></i><br>خطأ في تحميل البيانات</td></tr>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading services data:', error);
+            loadingElement.style.display = 'none';
+            tableContainer.style.display = 'block';
+            tableBody.innerHTML = '<tr><td colspan="6" class="no-data"><i class="fas fa-exclamation-triangle"></i><br>حدث خطأ في تحميل البيانات</td></tr>';
+        });
+}
+
+function loadReturnsData() {
+    const loadingElement = document.getElementById('returns-loading');
+    const tableContainer = document.getElementById('returns-table-container');
+    const tableBody = document.getElementById('returns-table-body');
+    
+    loadingElement.style.display = 'block';
+    tableContainer.style.display = 'none';
+    
+    const filterParams = getFilterParams();
+    
+    fetch(`/api/services-returns${filterParams}`)
+        .then(response => {
+            console.log('🔍 Returns API URL:', `/api/services-returns${filterParams}`);
+            return response.json();
+        })
+        .then(data => {
+            loadingElement.style.display = 'none';
+            tableContainer.style.display = 'block';
+            
+            if (data.status === 'success') {
+                updateReturnsSummary(data.summary);
+                displayReturnsTable(data.returns);
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="6" class="no-data"><i class="fas fa-exclamation-triangle"></i><br>خطأ في تحميل البيانات</td></tr>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading returns data:', error);
+            loadingElement.style.display = 'none';
+            tableContainer.style.display = 'block';
+            tableBody.innerHTML = '<tr><td colspan="6" class="no-data"><i class="fas fa-exclamation-triangle"></i><br>حدث خطأ في تحميل البيانات</td></tr>';
+        });
+}
+
+function updateServicesSummary(summary) {
+    document.getElementById('total-services-amount').textContent = 
+        summary.total_amount.toLocaleString('ar', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ريال';
+    document.getElementById('total-services-quantity').textContent = 
+        summary.total_quantity.toLocaleString('ar');
+    document.getElementById('total-services-receipts').textContent = 
+        summary.total_receipts.toLocaleString('ar');
+}
+
+function updateReturnsSummary(summary) {
+    document.getElementById('total-returns-amount').textContent = 
+        summary.total_returned_amount.toLocaleString('ar', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ريال';
+}
+
+function displayServicesTable(services) {
+    const tableBody = document.getElementById('services-table-body');
+    
+    console.log('📊 Services data received:', services);
+    
+    if (!services || services.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="6" class="no-data"><i class="fas fa-concierge-bell"></i><br>لا توجد خدمات في الفترة المحددة</td></tr>';
+        return;
+    }
+    
+    // حفظ البيانات الأصلية إذا لم تكن محفوظة من قبل
+    if (originalServicesData.length === 0) {
+        originalServicesData = [...services];
+    }
+    
+    // تحديث قائمة الفئات
+    updateCategoriesFilter(services, 'services-category-filter');
+    
+    let html = '';
+    let totalQuantity = 0;
+    let totalAmount = 0;
+    let totalReceipts = 0;
+    
+    services.forEach(service => {
+        html += `
+            <tr>
+                <td>${service.product_name}</td>
+                <td>${service.product_category}</td>
+                <td>${service.branch}</td>
+                <td>${service.total_quantity.toLocaleString('ar')}</td>
+                <td>${service.total_amount.toLocaleString('ar', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ريال</td>
+                <td>${service.receipt_count.toLocaleString('ar')}</td>
+            </tr>
+        `;
+        
+        totalQuantity += service.total_quantity;
+        totalAmount += service.total_amount;
+        totalReceipts += service.receipt_count;
+    });
+    
+    console.log('🔢 Services totals:', {totalQuantity, totalAmount, totalReceipts});
+    
+    // إضافة صف الإجمالي
+    html += `
+        <tr class="total-row">
+            <td colspan="3"><strong>🧮 الإجمالي</strong></td>
+            <td><strong>${totalQuantity.toLocaleString('ar')}</strong></td>
+            <td><strong>${totalAmount.toLocaleString('ar', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ريال</strong></td>
+            <td><strong>${totalReceipts.toLocaleString('ar')}</strong></td>
+        </tr>
+    `;
+    
+    console.log('📝 Final HTML with total row:', html.includes('total-row'));
+    
+    tableBody.innerHTML = html;
+}
+
+function displayReturnsTable(returns) {
+    const tableBody = document.getElementById('returns-table-body');
+    
+    console.log('📊 Returns data received:', returns);
+    
+    if (!returns || returns.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="6" class="no-data"><i class="fas fa-undo"></i><br>لا توجد مرتجعات خدمات في الفترة المحددة</td></tr>';
+        return;
+    }
+    
+    // حفظ البيانات الأصلية إذا لم تكن محفوظة من قبل
+    if (originalReturnsData.length === 0) {
+        originalReturnsData = [...returns];
+    }
+    
+    // تحديث قائمة الفئات
+    updateCategoriesFilter(returns, 'returns-category-filter');
+    
+    let html = '';
+    let totalReturnedQuantity = 0;
+    let totalReturnedAmount = 0;
+    let totalReturnReceipts = 0;
+    
+    returns.forEach(returnItem => {
+        html += `
+            <tr>
+                <td>${returnItem.product_name}</td>
+                <td>${returnItem.product_category}</td>
+                <td>${returnItem.branch}</td>
+                <td>${returnItem.returned_quantity.toLocaleString('ar')}</td>
+                <td>${returnItem.returned_amount.toLocaleString('ar', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ريال</td>
+                <td>${returnItem.return_receipts.toLocaleString('ar')}</td>
+            </tr>
+        `;
+        
+        totalReturnedQuantity += returnItem.returned_quantity;
+        totalReturnedAmount += returnItem.returned_amount;
+        totalReturnReceipts += returnItem.return_receipts;
+    });
+    
+    console.log('🔢 Returns totals:', {totalReturnedQuantity, totalReturnedAmount, totalReturnReceipts});
+    
+    // إضافة صف الإجمالي
+    html += `
+        <tr class="total-row">
+            <td colspan="3"><strong>🧮 الإجمالي</strong></td>
+            <td><strong>${totalReturnedQuantity.toLocaleString('ar')}</strong></td>
+            <td><strong>${totalReturnedAmount.toLocaleString('ar', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ريال</strong></td>
+            <td><strong>${totalReturnReceipts.toLocaleString('ar')}</strong></td>
+        </tr>
+    `;
+    
+    console.log('📝 Final HTML with total row:', html.includes('total-row'));
+    
+    tableBody.innerHTML = html;
+}
+
+function updateCategoriesFilter(data, filterId) {
+    const categoryFilter = document.getElementById(filterId);
+    if (!categoryFilter) return;
+    
+    // مسح الخيارات الموجودة ما عدا "جميع الفئات"
+    while (categoryFilter.options.length > 1) {
+        categoryFilter.remove(1);
+    }
+    
+    // الحصول على الفئات الفريدة
+    const categories = [...new Set(data.map(item => item.product_category))].sort();
+    
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        categoryFilter.appendChild(option);
+    });
+}
+
+// فلترة جدول الخدمات
+function applyServicesTableFilters() {
+    const nameFilter = document.getElementById('services-filter').value.toLowerCase();
+    const categoryFilter = document.getElementById('services-category-filter').value;
+    const branchFilter = document.getElementById('services-branch-filter-table').value;
+    
+    let filteredData = originalServicesData.filter(service => {
+        const nameMatch = !nameFilter || service.product_name.toLowerCase().includes(nameFilter);
+        const categoryMatch = !categoryFilter || service.product_category === categoryFilter;
+        const branchMatch = !branchFilter || service.branch === branchFilter;
+        
+        return nameMatch && categoryMatch && branchMatch;
+    });
+    
+    displayServicesTable(filteredData);
+    
+    // تحديث كروت الخدمات فقط
+    updateServicesSummaryFromFiltered(filteredData);
+}
+
+// مسح فلاتر جدول الخدمات
+function clearServicesTableFilters() {
+    document.getElementById('services-filter').value = '';
+    document.getElementById('services-category-filter').value = '';
+    document.getElementById('services-branch-filter-table').value = '';
+    
+    displayServicesTable(originalServicesData);
+    updateServicesSummaryFromFiltered(originalServicesData);
+}
+
+// فلترة جدول المرتجعات
+function applyReturnsTableFilters() {
+    const nameFilter = document.getElementById('returns-filter').value.toLowerCase();
+    const categoryFilter = document.getElementById('returns-category-filter').value;
+    const branchFilter = document.getElementById('returns-branch-filter-table').value;
+    
+    let filteredData = originalReturnsData.filter(returnItem => {
+        const nameMatch = !nameFilter || returnItem.product_name.toLowerCase().includes(nameFilter);
+        const categoryMatch = !categoryFilter || returnItem.product_category === categoryFilter;
+        const branchMatch = !branchFilter || returnItem.branch === branchFilter;
+        
+        return nameMatch && categoryMatch && branchMatch;
+    });
+    
+    displayReturnsTable(filteredData);
+    
+    // تحديث كروت المرتجعات فقط
+    updateReturnsSummaryFromFiltered(filteredData);
+}
+
+// مسح فلاتر جدول المرتجعات
+function clearReturnsTableFilters() {
+    document.getElementById('returns-filter').value = '';
+    document.getElementById('returns-category-filter').value = '';
+    document.getElementById('returns-branch-filter-table').value = '';
+    
+    displayReturnsTable(originalReturnsData);
+    updateReturnsSummaryFromFiltered(originalReturnsData);
+}
+
+function updateServicesSummaryFromFiltered(services) {
+    let totalAmount = 0;
+    let totalQuantity = 0;
+    let totalReceipts = 0;
+    
+    services.forEach(service => {
+        totalAmount += service.total_amount;
+        totalQuantity += service.total_quantity;
+        totalReceipts += service.receipt_count;
+    });
+    
+    document.getElementById('total-services-amount').textContent = 
+        totalAmount.toLocaleString('ar', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ريال';
+    document.getElementById('total-services-quantity').textContent = 
+        totalQuantity.toLocaleString('ar');
+    document.getElementById('total-services-receipts').textContent = 
+        totalReceipts.toLocaleString('ar');
+}
+
+function updateReturnsSummaryFromFiltered(returns) {
+    let totalReturnedAmount = 0;
+    
+    returns.forEach(returnItem => {
+        totalReturnedAmount += returnItem.returned_amount;
+    });
+    
+    document.getElementById('total-returns-amount').textContent = 
+        totalReturnedAmount.toLocaleString('ar', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ريال';
+}
+
+function goBack() {
+    // الاحتفاظ بالفلاتر الحالية عند العودة
+    const filterParams = getFilterParams();
+    window.location.href = `/${filterParams}`;
+}
+</script>
+{% endblock %}

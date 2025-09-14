@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/customers_analytics.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-bg">
+    <!-- Header Section -->
+    <div class="hero-section">
+        <div class="hero-content">
+            <h1><i class="fas fa-users"></i> تحليل شامل للعملاء</h1>
+            <p class="hero-subtitle">نظرة تفصيلية على سلوك العملاء وأنماط الشراء</p>
+        </div>
+    </div>
+
+    <!-- تحديث الفلاتر -->
+    <div class="filters modern-filters" id="filters-container">
+        <div class="filter-group">
+            <label>فلاتر سريعة:</label>
+            <button id="monthly-btn" class="btn-secondary">هذا الشهر</button>
+            <button id="quarterly-btn" class="btn-secondary">آخر 3 أشهر</button>
+        </div>
+        <div class="filter-group">
+            <label for="month-picker">الشهر:</label>
+            <input type="month" id="month-picker" class="month-filter">
+        </div>
+        <div class="filter-group">
+            <label for="branch-select">الفرع:</label>
+            <select id="branch-select" class="branch-filter">
+                <option value="">كل الفروع</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="start-date">من تاريخ:</label>
+            <input type="date" id="start-date" class="date-filter">
+            <label for="end-date">إلى تاريخ:</label>
+            <input type="date" id="end-date" class="date-filter">
+            <button id="apply-filters-btn" class="btn-primary">تطبيق الفلاتر</button>
+        </div>
+    </div>
+
+    <!-- المؤشرات الرئيسية للعملاء -->
+    <section class="dashboard-section" id="overview-section">
+        <h2><i class="fas fa-chart-line"></i> نظرة عامة</h2>
+        <div id="customers-overview-content" class="kpi-grid"></div>
+    </section>
+
+    <!-- أفضل العملاء حسب الإيرادات -->
+    <section class="dashboard-section" id="top-revenue-section">
+        <h2><i class="fas fa-trophy"></i> أفضل العملاء حسب الإيرادات</h2>
+        <div id="top-customers-revenue-content" class="table-container"></div>
+    </section>
+
+    <!-- أكثر العملاء تكراراً -->
+    <section class="dashboard-section" id="top-frequency-section">
+        <h2><i class="fas fa-sync-alt"></i> أكثر العملاء تكراراً في الشراء</h2>
+        <div id="top-customers-frequency-content" class="table-container"></div>
+    </section>
+
+    <!-- توزيع العملاء حسب المدن -->
+    <section class="dashboard-section" id="cities-section">
+        <h2><i class="fas fa-map-marker-alt"></i> توزيع العملاء حسب المدن</h2>
+        <div id="customers-by-city-content" class="table-container"></div>
+    </section>
+
+    <!-- شرائح العملاء -->
+    <section class="dashboard-section" id="segments-section">
+        <h2><i class="fas fa-layer-group"></i> شرائح العملاء</h2>
+        <div id="customer-segments-content" class="table-container"></div>
+    </section>
+
+    <!-- الاتجاهات الشهرية -->
+    <section class="dashboard-section" id="trends-section">
+        <h2><i class="fas fa-chart-area"></i> الاتجاهات الشهرية للعملاء</h2>
+        <div id="monthly-trends-content" class="table-container"></div>
+    </section>
+
+</div>
+{% endblock %}
+
+{% block dashboard_scripts %}
+<script src="{{ url_for('static', filename='js/customers_analytics.js') }}"></script>
+{% endblock %}

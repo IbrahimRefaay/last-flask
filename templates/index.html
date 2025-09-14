@@ -1,0 +1,238 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <!-- Modern Dashboard Wrapper -->
+    <div class="dashboard-bg">
+        <!-- Navigation Outline -->
+        <section class="presentation-outline">
+            <h2><i class="fas fa-list"></i> محتويات التقرير</h2>
+            <div class="outline-grid">
+                <div class="outline-card" onclick="scrollToSection('kpi-content')">
+                    <div class="outline-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>المؤشرات الرئيسية</h3>
+                        <p>إجمالي المبيعات، الأرباح، والفواتير</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="scrollToSection('main-stats')">
+                    <div class="outline-icon">
+                        <i class="fas fa-shopping-cart"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>المبيعات والخدمات</h3>
+                        <p>تفاصيل المبيعات وإحصائيات الخدمات</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="scrollToSection('branch-stats')">
+                    <div class="outline-icon">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>إحصائيات الفروع</h3>
+                        <p>أداء المبيعات والأرباح لكل فرع</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="scrollToSection('category-stats')">
+                    <div class="outline-icon">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>الأصناف</h3>
+                        <p>أكثر الفئات مبيعاً وربحية</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="scrollToSection('customers-analytics')">
+                    <div class="outline-icon">
+                        <i class="fas fa-user-friends"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>تحليل العملاء</h3>
+                        <p>أهم 15 عميل وأهم 10 فئات بالكمية والمبلغ</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="scrollToSection('sellers-stats')">
+                    <div class="outline-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>البائعين</h3>
+                        <p>أداء أفضل البائعين في كل فرع</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="scrollToSection('products-stats')">
+                    <div class="outline-icon">
+                        <i class="fas fa-cubes"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>المنتجات</h3>
+                        <p>أكثر المنتجات مبيعاً وربحية</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="window.location.href='/products'">
+                    <div class="outline-icon">
+                        <i class="fas fa-warehouse"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>صفحة المنتجات</h3>
+                        <p>أهم 10 منتجات ومخزونها اليومي</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="window.location.href='/inventory-dashboard'">
+                    <div class="outline-icon">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>داشبورد المخزون المتكامل</h3>
+                        <p>نظرة شاملة مع تحليل متقدم ونظام إنذار</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="window.location.href='/rahaty-dashboard'">
+                    <div class="outline-icon">
+                        <i class="fas fa-store"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>تحليلات متجر رحتي</h3>
+                        <p>تحليل شامل لبيانات التجارة الإلكترونية</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="scrollToSection('stock-stats')">
+                    <div class="outline-icon">
+                        <i class="fas fa-boxes"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>المخزون</h3>
+                        <p>أفضل 20 منتج مع حالة المخزون</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="scrollToSection('returns-stats')">
+                    <div class="outline-icon">
+                        <i class="fas fa-arrow-rotate-left"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>المرتجعات</h3>
+                        <p>تحليل المرتجعات حسب الفئات والبائعين</p>
+                    </div>
+                </div>
+                
+                <div class="outline-card" onclick="goToServicesPage()" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white;">
+                    <div class="outline-icon" style="background: rgba(255,255,255,0.2);">
+                        <i class="fas fa-concierge-bell"></i>
+                    </div>
+                    <div class="outline-content">
+                        <h3>🔔 الخدمات</h3>
+                        <p>تحليل تفصيلي للخدمات والمرتجعات</p>
+                    </div>
+                </div>
+                
+            </div>
+        </section>
+
+        <div class="filters modern-filters" id="filters-container">
+            <div class="filter-group">
+                <label>فلاتر سريعة:</label>
+                <button id="mid-monthly-btn" class="btn-secondary">النصف الأول من الشهر</button>
+                <button id="monthly-btn" class="btn-secondary">هذا الشهر</button>
+            </div>
+            <div class="filter-group">
+                <label for="month-picker">الشهر:</label>
+                <input type="month" id="month-picker" class="month-filter" style="min-width: 120px;">
+            </div>
+            <div class="filter-group">
+                <label for="branch-select">الفرع:</label>
+                <select id="branch-select" class="branch-filter">
+                    <option value="">كل الفروع</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="day-selector">اليوم:</label>
+                <select id="day-selector" class="day-filter">
+                    <option value="">اختر يوم</option>
+                </select>
+                <label for="start-day">من يوم:</label>
+                <select id="start-day" class="day-filter">
+                    <option value="">من</option>
+                </select>
+                <label for="end-day">إلى يوم:</label>
+                <select id="end-day" class="day-filter">
+                    <option value="">إلى</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="start-date">من تاريخ:</label>
+                <input type="date" id="start-date" class="date-filter" style="min-width: 120px;">
+                <label for="end-date">إلى تاريخ:</label>
+                <input type="date" id="end-date" class="date-filter" style="min-width: 120px;">
+                <button id="manual-fetch-btn" class="btn-primary">عرض البيانات</button>
+            </div>
+        </div>
+
+        <!-- تنظيم جديد للمحتوى -->
+        <div id="kpi-content"></div>
+
+        <section class="dashboard-section" id="main-stats">
+            <h2>المبيعات والخدمات</h2>
+            <div id="services-table-content" class="table-container"></div>
+            <div id="sales-table-content" class="table-container"></div>
+        </section>
+
+        <section class="dashboard-section" id="branch-stats">
+            <h2>إحصائيات الفروع</h2>
+            <div id="branch-sales-table-content" class="table-container"></div>
+            <div id="branch-profits-table-content" class="table-container"></div>
+        </section>
+
+        <section class="dashboard-section" id="category-stats">
+            <h2>الأصناف</h2>
+            <div id="top-categories-table-content" class="table-container"></div>
+            <div id="top-categories-by-profit-table-content" class="table-container"></div>
+        </section>
+
+        <section class="dashboard-section" id="customers-analytics">
+            <h2>تحليل العملاء والفئات المتقدم</h2>
+            <div id="top-10-categories-table-content" class="table-container"></div>
+            <div id="top-15-customers-table-content" class="table-container"></div>
+        </section>
+
+        <section class="dashboard-section" id="sellers-stats">
+            <h2>البائعين</h2>
+            <div id="top-sellers-table-content" class="table-container"></div>
+            <div id="top-10-sellers-table-content" class="table-container"></div>
+        </section>
+
+        <section class="dashboard-section" id="products-stats">
+            <h2>المنتجات</h2>
+            <div id="top-products-by-sales-value-content" class="table-container"></div>
+            <div id="top-products-by-quantity-content" class="table-container"></div>
+            <div id="top-products-by-profit-content" class="table-container"></div>
+        </section>
+
+        <section class="dashboard-section" id="returns-stats">
+            <h2>المرتجعات</h2>
+            <div id="top-categories-by-returns-content" class="table-container"></div>
+            <div id="top-sellers-by-returns-content" class="table-container"></div>
+        </section>
+
+        <section class="dashboard-section" id="stock-stats">
+            <h2>المخزون</h2>
+            <div id="stock-products-content" class="table-container"></div>
+        </section>
+    </div>
+    <!-- End Modern Dashboard Wrapper -->
+{% endblock %}
+
+{% block dashboard_scripts %}
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+{% endblock %}
