@@ -297,7 +297,7 @@ def top_value_products():
 
 @inventory_dashboard_bp.route('/api/stock-alerts')
 def stock_alerts():
-    """Get stock alerts - alias for low-stock-alerts."""
+    """Get stock alerts with intelligent stock status based on sales velocity."""
     try:
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 50))
@@ -309,10 +309,22 @@ def stock_alerts():
         # Query للحصول على العدد الكلي
         count_query = f"""
             SELECT COUNT(*) as total_count
-            FROM `{PROJECT_ID}.{DATASET_ID}.stock_data`
-            WHERE Available_Qty < 10
-            AND Barcode IS NOT NULL
-            AND (Category IS NULL OR (Category LIKE '% / %' AND NOT (Category LIKE '%خدمات%' OR Category LIKE '%خدمات وخصومات%')))
+            FROM (
+                SELECT 
+                    t1.Barcode
+                FROM `{PROJECT_ID}.{DATASET_ID}.stock_data` AS t1
+                LEFT JOIN `{PROJECT_ID}.{DATASET_ID}.pos_order_lines` AS t2
+                ON t1.Barcode = t2.product_barcode
+                AND t2.order_date >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL 30 DAY)
+                WHERE t1.Available_Qty < 10
+                AND t1.Available_Qty > 0
+                AND t1.Barcode IS NOT NULL
+                AND (t1.Category IS NULL OR (t1.Category LIKE '% / %' 
+                    AND NOT (t1.Category LIKE '%خدمات%' 
+                        OR t1.Category LIKE '%خدمات وخصومات%'
+                        OR t1.Category LIKE '%قطع غيار سيارات%')))
+                GROUP BY t1.Product_Name, t1.Barcode, t1.Available_Qty, t1.Unit_Cost, t1.Category
+            ) AS subquery
         """
         
         count_result = list(run_query(count_query))
@@ -320,19 +332,34 @@ def stock_alerts():
         total_pages = (total_count + limit - 1) // limit
         
         alerts_query = f"""
-            SELECT 
-                Product_Name as product_name,
-                Barcode as barcode,
-                Available_Qty as qty_available,
-                Unit_Cost,
-                (Available_Qty * Unit_Cost) as value,
-                Category as full_category,
-                TRIM(SPLIT(Category, ' / ')[SAFE_OFFSET(0)]) as main_category
-            FROM `{PROJECT_ID}.{DATASET_ID}.stock_data`
-            WHERE Available_Qty < 10
-            AND Barcode IS NOT NULL
-            AND (Category IS NULL OR (Category LIKE '% / %' AND NOT (Category LIKE '%خدمات%' OR Category LIKE '%خدمات وخصومات%')))
-            ORDER BY Available_Qty ASC, (Available_Qty * Unit_Cost) DESC
+            SELECT
+                t1.Product_Name AS product_name,
+                t1.Barcode AS barcode,
+                t1.Available_Qty AS qty_available,
+                t1.Unit_Cost,
+                (t1.Available_Qty * t1.Unit_Cost) AS value,
+                t1.Category AS full_category,
+                TRIM(SPLIT(t1.Category, ' / ')[SAFE_OFFSET(0)]) AS main_category,
+                COALESCE(SUM(t2.quantity), 0) AS total_sales_quantity_last_30_days,
+                CASE
+                    WHEN t1.Available_Qty <= COALESCE(SUM(t2.quantity), 0) / 30 * 7 THEN 'Very Low'
+                    WHEN t1.Available_Qty <= COALESCE(SUM(t2.quantity), 0) / 30 * 14 THEN 'Low'
+                    WHEN t1.Available_Qty < 10 THEN 'Low (Fixed Threshold)'
+                    ELSE 'Sufficient'
+                END AS stock_status
+            FROM `{PROJECT_ID}.{DATASET_ID}.stock_data` AS t1
+            LEFT JOIN `{PROJECT_ID}.{DATASET_ID}.pos_order_lines` AS t2
+            ON t1.Barcode = t2.product_barcode
+            AND t2.order_date >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL 30 DAY)
+            WHERE t1.Available_Qty < 10
+            AND t1.Available_Qty > 0
+            AND t1.Barcode IS NOT NULL
+            AND (t1.Category IS NULL OR (t1.Category LIKE '% / %' 
+                AND NOT (t1.Category LIKE '%خدمات%' 
+                    OR t1.Category LIKE '%خدمات وخصومات%'
+                    OR t1.Category LIKE '%قطع غيار سيارات%')))
+            GROUP BY t1.Product_Name, t1.Barcode, t1.Available_Qty, t1.Unit_Cost, t1.Category
+            ORDER BY t1.Available_Qty ASC, (t1.Available_Qty * t1.Unit_Cost) DESC
             LIMIT {limit} OFFSET {offset}
         """
         
@@ -347,7 +374,9 @@ def stock_alerts():
                 "unit_cost": float(row.Unit_Cost or 0),
                 "value": float(row.value or 0),
                 "category": row.full_category,
-                "main_category": row.main_category
+                "main_category": row.main_category,
+                "total_sales_last_30_days": int(row.total_sales_quantity_last_30_days or 0),
+                "stock_status": row.stock_status
             })
             
         return jsonify({
@@ -582,8 +611,40 @@ def low_stock_alerts():
 def stagnant_stock():
     """Get stagnant stock (products with no recent sales)."""
     try:
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 50))
+        offset = (page - 1) * limit
+        
         PROJECT_ID = get_project_id()
         DATASET_ID = get_dataset_id()
+        
+        # Query للحصول على العدد الكلي
+        count_query = f"""
+            WITH RecentSales AS (
+                SELECT DISTINCT product_barcode
+                FROM `{PROJECT_ID}.{DATASET_ID}.pos_order_lines`
+                WHERE DATE(order_date) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+                AND product_barcode IS NOT NULL
+                AND product_category LIKE '% / %'
+                AND NOT (product_category LIKE '%خدمات%' OR product_category LIKE '%خدمات وخصومات%')
+            )
+            SELECT COUNT(*) as total_count
+            FROM `{PROJECT_ID}.{DATASET_ID}.stock_data` s
+            LEFT JOIN RecentSales rs ON s.Barcode = rs.product_barcode
+            WHERE rs.product_barcode IS NULL
+            AND s.Available_Qty > 0
+            AND (s.Category IS NULL OR (s.Category LIKE '% / %' 
+                AND NOT (s.Category LIKE '%خدمات%' OR s.Category LIKE '%خدمات وخصومات%')
+                AND NOT (s.Category LIKE '%منوع%')
+                AND NOT (s.Category LIKE '%ادوات تغليف%')
+                AND NOT (s.Category LIKE '%ورد%')
+                AND NOT (s.Category LIKE '%بوكيه ورد%')
+                AND NOT (s.Category LIKE '%اشجار زينة%')))
+        """
+        
+        count_result = list(run_query(count_query))
+        total_count = count_result[0].total_count if count_result else 0
+        total_pages = (total_count + limit - 1) // limit
         
         # Get products that haven't sold in the last 30 days
         stagnant_query = f"""
@@ -594,29 +655,15 @@ def stagnant_stock():
                 AND product_barcode IS NOT NULL
                 AND product_category LIKE '% / %'
                 AND NOT (product_category LIKE '%خدمات%' OR product_category LIKE '%خدمات وخصومات%')
-            ),
-            LastSales AS (
-                SELECT 
-                    product_barcode,
-                    MAX(DATE(order_date)) as last_sale_date
-                FROM `{PROJECT_ID}.{DATASET_ID}.pos_order_lines`
-                WHERE product_barcode IS NOT NULL
-                AND product_category LIKE '% / %'
-                AND NOT (product_category LIKE '%خدمات%' OR product_category LIKE '%خدمات وخصومات%')
-                GROUP BY product_barcode
             )
             SELECT 
                 s.Product_Name as product_name,
                 s.Barcode as barcode,
                 s.Available_Qty as quantity,
-                ls.last_sale_date,
-                CASE 
-                    WHEN ls.last_sale_date IS NULL THEN 999
-                    ELSE DATE_DIFF(CURRENT_DATE(), ls.last_sale_date, DAY)
-                END as days_stagnant
+                s.Unit_Cost as unit_cost,
+                (s.Available_Qty * s.Unit_Cost) as total_value
             FROM `{PROJECT_ID}.{DATASET_ID}.stock_data` s
             LEFT JOIN RecentSales rs ON s.Barcode = rs.product_barcode
-            LEFT JOIN LastSales ls ON s.Barcode = ls.product_barcode
             WHERE rs.product_barcode IS NULL
             AND s.Available_Qty > 0
             AND (s.Category IS NULL OR (s.Category LIKE '% / %' 
@@ -626,8 +673,8 @@ def stagnant_stock():
                 AND NOT (s.Category LIKE '%ورد%')
                 AND NOT (s.Category LIKE '%بوكيه ورد%')
                 AND NOT (s.Category LIKE '%اشجار زينة%')))
-            ORDER BY days_stagnant DESC, s.Available_Qty DESC
-            LIMIT 50
+            ORDER BY s.Available_Qty DESC
+            LIMIT {limit} OFFSET {offset}
         """
         
         results = run_query(stagnant_query)
@@ -638,11 +685,20 @@ def stagnant_stock():
                 "product_name": row.product_name,
                 "barcode": row.barcode,
                 "quantity": int(row.quantity or 0),
-                "last_sale_date": str(row.last_sale_date) if row.last_sale_date else None,
-                "days_stagnant": int(row.days_stagnant or 0)
+                "unit_cost": float(row.unit_cost or 0),
+                "total_value": float(row.total_value or 0)
             })
             
-        return jsonify({"status": "success", "data": stagnant_data})
+        return jsonify({
+            "status": "success", 
+            "data": stagnant_data,
+            "pagination": {
+                "current_page": page,
+                "total_pages": total_pages,
+                "total_items": total_count,
+                "items_per_page": limit
+            }
+        })
         
     except Exception as e:
         print(f"❌ Error in /api/stagnant-stock: {e}")

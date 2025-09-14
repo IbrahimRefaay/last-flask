@@ -149,14 +149,14 @@
     <!-- Stagnant Stock Section -->
     <div class="section-card">
         <div class="section-header">
-            <i class="fas fa-pause-circle"></i>
-            المخزون الراكد
+            <i class="fas fa-boxes"></i>
+            المنتجات
         </div>
         <div class="section-content">
             <div class="table-responsive">
                 <div id="stagnant-stock" class="loading">
                     <div class="spinner"></div>
-                    جاري تحميل بيانات المخزون الراكد...
+                    جاري تحميل بيانات المنتجات...
                 </div>
             </div>
         </div>
@@ -727,6 +727,15 @@
     direction: ltr;
     display: inline-block;
     font-style: normal;
+}
+
+/* Quantity styling */
+.quantity {
+    color: #007bff;
+    font-weight: 700;
+    font-family: 'Tahoma', 'Arial', sans-serif;
+    font-size: 1.1rem;
+    display: inline-block;
 }
 
 /* Pagination styles */
@@ -2021,14 +2030,19 @@ function loadPurchaseSources(page = 1) {
 }
 
 function loadStagnantStock(page = 1) {
-    fetch(`/api/stock-alerts?page=${page}&limit=10`)
+    fetch(`/api/stagnant-stock?page=${page}&limit=20`)
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
                 updateStagnantStockTable(data.data, page, data.pagination || {});
+            } else {
+                document.getElementById('stagnant-stock').innerHTML = '<div class="message-box error">خطأ في تحميل البيانات</div>';
             }
         })
-        .catch(error => console.error('Error loading stock alerts:', error));
+        .catch(error => {
+            console.error('Error loading stagnant stock:', error);
+            document.getElementById('stagnant-stock').innerHTML = '<div class="message-box error">خطأ في تحميل البيانات</div>';
+        });
 }
 
 function loadProfitableProducts(page = 1) {
@@ -2124,19 +2138,23 @@ function updateStagnantStockTable(data, page, pagination) {
                         <th>الباركود</th>
                         <th>الكمية المتاحة</th>
                         <th>تكلفة الوحدة</th>
-                        <th>القيمة الإجمالية</th>
+                        <th>إجمالي القيمة</th>
                     </tr>
                 </thead>
                 <tbody>`;
     
     data.forEach(product => {
+        const unitCost = product.unit_cost || 0;
+        const totalValue = product.total_value || 0;
+        const quantity = product.quantity || 0;
+        
         html += `
             <tr>
                 <td>${product.product_name}</td>
                 <td>${product.barcode}</td>
-                <td>${product.qty_available}</td>
-                <td><span class="currency">${product.unit_cost} ر.س</span></td>
-                <td><span class="currency">${product.value} ر.س</span></td>
+                <td><span class="quantity">${quantity}</span></td>
+                <td><span class="currency">${unitCost.toFixed(2)} ر.س</span></td>
+                <td><span class="currency">${totalValue.toFixed(2)} ر.س</span></td>
             </tr>`;
     });
     
