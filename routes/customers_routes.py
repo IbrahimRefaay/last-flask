@@ -12,12 +12,86 @@ def customers_analytics():
     """صفحة تحليل العملاء الشاملة"""
     return render_template('customers_analytics.html')
 
+@customers_bp.route('/api/branches')
+def get_branches():
+    """جلب قائمة الفروع المتاحة"""
+    try:
+        PROJECT_ID = get_project_id()
+        DATASET_ID = get_dataset_id()
+        
+        branches_query = f"""
+            SELECT 
+                CASE 
+                    WHEN delivery_address IS NULL OR delivery_address = '' THEN 'غير محدد'
+                    WHEN LOWER(delivery_address) LIKE '%الرياض%' THEN 'الرياض'
+                    WHEN LOWER(delivery_address) LIKE '%جدة%' THEN 'جدة'
+                    WHEN LOWER(delivery_address) LIKE '%الدمام%' THEN 'الدمام'
+                    WHEN LOWER(delivery_address) LIKE '%مكة%' THEN 'مكة المكرمة'
+                    WHEN LOWER(delivery_address) LIKE '%المدينة%' THEN 'المدينة المنورة'
+                    WHEN LOWER(delivery_address) LIKE '%الطائف%' THEN 'الطائف'
+                    WHEN LOWER(delivery_address) LIKE '%الخبر%' THEN 'الخبر'
+                    WHEN LOWER(delivery_address) LIKE '%القطيف%' THEN 'القطيف'
+                    WHEN LOWER(delivery_address) LIKE '%الأحساء%' THEN 'الأحساء'
+                    WHEN LOWER(delivery_address) LIKE '%أبها%' THEN 'أبها'
+                    WHEN LOWER(delivery_address) LIKE '%تبوك%' THEN 'تبوك'
+                    WHEN LOWER(delivery_address) LIKE '%جازان%' THEN 'جازان'
+                    WHEN LOWER(delivery_address) LIKE '%نجران%' THEN 'نجران'
+                    WHEN LOWER(delivery_address) LIKE '%حائل%' THEN 'حائل'
+                    WHEN LOWER(delivery_address) LIKE '%القصيم%' THEN 'القصيم'
+                    ELSE 'أخرى'
+                END as branch_name,
+                COUNT(*) as order_count
+            FROM `{PROJECT_ID}.{DATASET_ID}.pos_order_lines`
+            WHERE phone_number NOT IN ('0555555555', '0500000000', 'رفض العميل', '0000000000', '1111111111')
+            AND subtotal_incl > 0
+            GROUP BY branch_name
+            HAVING order_count > 5
+            ORDER BY order_count DESC
+        """
+        
+        results = run_query(branches_query)
+        
+        branches_data = []
+        for row in results:
+            branches_data.append({
+                "name": row.branch_name or 'غير محدد',
+                "order_count": int(row.order_count or 0)
+            })
+            
+        return jsonify({"status": "success", "data": branches_data})
+        
+    except Exception as e:
+        print(f"❌ Error in get branches: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @customers_bp.route('/api/customers-overview')
 def customers_overview():
     """إحصائيات عامة عن العملاء"""
     try:
         PROJECT_ID = get_project_id()
         DATASET_ID = get_dataset_id()
+        
+        # استقبال الفلاتر
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        branch = request.args.get('branch')
+        
+        # بناء شروط WHERE
+        where_conditions = [
+            "customer_name IS NOT NULL",
+            "customer_name != ''",
+            "subtotal_incl > 0",
+            "phone_number NOT IN ('0555555555', '0500000000', 'رفض العميل', '0000000000', '1111111111')"
+        ]
+        
+        if start_date:
+            where_conditions.append(f"order_date >= '{start_date}'")
+        if end_date:
+            where_conditions.append(f"order_date <= '{end_date}'")
+        if branch:
+            where_conditions.append(f"delivery_address LIKE '%{branch}%'")
+        
+        where_clause = " AND ".join(where_conditions)
         
         overview_query = f"""
             SELECT 
@@ -28,9 +102,7 @@ def customers_overview():
                 MIN(order_date) as first_order_date,
                 MAX(order_date) as last_order_date
             FROM `{PROJECT_ID}.{DATASET_ID}.pos_order_lines`
-            WHERE customer_name IS NOT NULL 
-            AND customer_name != ''
-            AND subtotal_incl > 0
+            WHERE {where_clause}
         """
         
         results = list(run_query(overview_query))
@@ -77,16 +149,36 @@ def top_customers_by_revenue():
         limit = int(request.args.get('limit', 10))
         offset = (page - 1) * limit
         
+        # استقبال الفلاتر
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        branch = request.args.get('branch')
+        
         PROJECT_ID = get_project_id()
         DATASET_ID = get_dataset_id()
+        
+        # بناء شروط WHERE
+        where_conditions = [
+            "phone_number IS NOT NULL",
+            "phone_number != ''",
+            "subtotal_incl > 0",
+            "phone_number NOT IN ('0555555555', '0500000000', 'رفض العميل', '0000000000', '1111111111')"
+        ]
+        
+        if start_date:
+            where_conditions.append(f"order_date >= '{start_date}'")
+        if end_date:
+            where_conditions.append(f"order_date <= '{end_date}'")
+        if branch:
+            where_conditions.append(f"delivery_address LIKE '%{branch}%'")
+        
+        where_clause = " AND ".join(where_conditions)
         
         # العدد الكلي
         count_query = f"""
             SELECT COUNT(DISTINCT phone_number) as total_count
             FROM `{PROJECT_ID}.{DATASET_ID}.pos_order_lines`
-            WHERE phone_number IS NOT NULL 
-            AND phone_number != ''
-            AND subtotal_incl > 0
+            WHERE {where_clause}
         """
         
         count_result = list(run_query(count_query))
@@ -98,6 +190,7 @@ def top_customers_by_revenue():
                 SELECT 
                     phone_number,
                     customer_name,
+                    COALESCE(delivery_address, 'غير محدد') as delivery_address,
                     COUNT(*) as total_orders,
                     SUM(CASE WHEN subtotal_incl IS NOT NULL THEN subtotal_incl ELSE 0 END) as total_revenue,
                     AVG(CASE WHEN subtotal_incl IS NOT NULL THEN subtotal_incl ELSE 0 END) as avg_order_value,
@@ -105,10 +198,8 @@ def top_customers_by_revenue():
                     MAX(order_date) as last_order,
                     COUNT(DISTINCT DATE(order_date)) as active_days
                 FROM `{PROJECT_ID}.{DATASET_ID}.pos_order_lines`
-                WHERE phone_number IS NOT NULL 
-                AND phone_number != ''
-                AND subtotal_incl > 0
-                GROUP BY phone_number, customer_name
+                WHERE {where_clause}
+                GROUP BY phone_number, customer_name, delivery_address
             ),
             TotalRevenue AS (
                 SELECT SUM(total_revenue) as grand_total
@@ -117,6 +208,7 @@ def top_customers_by_revenue():
             SELECT 
                 cr.phone_number,
                 cr.customer_name,
+                cr.delivery_address,
                 cr.total_orders,
                 cr.total_revenue,
                 cr.avg_order_value,
@@ -137,6 +229,7 @@ def top_customers_by_revenue():
             customers_data.append({
                 "phone_number": row.phone_number or 'غير محدد',
                 "customer_name": row.customer_name or 'غير محدد',
+                "delivery_address": row.delivery_address or 'غير محدد',
                 "total_orders": int(row.total_orders or 0),
                 "total_revenue": f"{float(row.total_revenue or 0):,.2f}",
                 "avg_order_value": f"{float(row.avg_order_value or 0):,.2f}",
@@ -169,8 +262,30 @@ def top_customers_by_frequency():
         limit = int(request.args.get('limit', 10))
         offset = (page - 1) * limit
         
+        # استقبال الفلاتر
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        branch = request.args.get('branch')
+        
         PROJECT_ID = get_project_id()
         DATASET_ID = get_dataset_id()
+        
+        # بناء شروط WHERE
+        where_conditions = [
+            "phone_number IS NOT NULL",
+            "phone_number != ''",
+            "subtotal_incl > 0",
+            "phone_number NOT IN ('0555555555', '0500000000', 'رفض العميل', '0000000000', '1111111111')"
+        ]
+        
+        if start_date:
+            where_conditions.append(f"order_date >= '{start_date}'")
+        if end_date:
+            where_conditions.append(f"order_date <= '{end_date}'")
+        if branch:
+            where_conditions.append(f"delivery_address LIKE '%{branch}%'")
+        
+        where_clause = " AND ".join(where_conditions)
         
         frequency_query = f"""
             WITH CustomerFrequency AS (
@@ -185,9 +300,7 @@ def top_customers_by_frequency():
                     MAX(order_date) as last_order,
                     DATE_DIFF(MAX(order_date), MIN(order_date), DAY) as customer_lifetime_days
                 FROM `{PROJECT_ID}.{DATASET_ID}.pos_order_lines`
-                WHERE phone_number IS NOT NULL 
-                AND phone_number != ''
-                AND subtotal_incl > 0
+                WHERE {where_clause}
                 GROUP BY phone_number, customer_name
             )
             SELECT 
@@ -236,21 +349,59 @@ def top_customers_by_frequency():
 def customers_by_city():
     """توزيع العملاء حسب المدن (إذا كان هناك عمود للمدينة)"""
     try:
+        # استقبال الفلاتر
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        branch = request.args.get('branch')
+        
         PROJECT_ID = get_project_id()
         DATASET_ID = get_dataset_id()
+        
+        # بناء شروط WHERE
+        where_conditions = [
+            "customer_name IS NOT NULL",
+            "customer_name != ''",
+            "subtotal_incl > 0",
+            "phone_number NOT IN ('0555555555', '0500000000', 'رفض العميل', '0000000000', '1111111111')"
+        ]
+        
+        if start_date:
+            where_conditions.append(f"order_date >= '{start_date}'")
+        if end_date:
+            where_conditions.append(f"order_date <= '{end_date}'")
+        if branch:
+            where_conditions.append(f"delivery_address LIKE '%{branch}%'")
+        
+        where_clause = " AND ".join(where_conditions)
         
         # نحاول أولاً معرفة إذا كان هناك عمود للمدينة أو العنوان
         city_query = f"""
             WITH CustomerCities AS (
                 SELECT 
-                    'غير محدد' as city,
+                    CASE 
+                        WHEN delivery_address IS NULL OR delivery_address = '' THEN 'غير محدد'
+                        WHEN LOWER(delivery_address) LIKE '%الرياض%' THEN 'الرياض'
+                        WHEN LOWER(delivery_address) LIKE '%جدة%' THEN 'جدة'
+                        WHEN LOWER(delivery_address) LIKE '%الدمام%' THEN 'الدمام'
+                        WHEN LOWER(delivery_address) LIKE '%مكة%' THEN 'مكة المكرمة'
+                        WHEN LOWER(delivery_address) LIKE '%المدينة%' THEN 'المدينة المنورة'
+                        WHEN LOWER(delivery_address) LIKE '%الطائف%' THEN 'الطائف'
+                        WHEN LOWER(delivery_address) LIKE '%الخبر%' THEN 'الخبر'
+                        WHEN LOWER(delivery_address) LIKE '%القطيف%' THEN 'القطيف'
+                        WHEN LOWER(delivery_address) LIKE '%الأحساء%' OR LOWER(delivery_address) LIKE '%احساء%' THEN 'الأحساء'
+                        WHEN LOWER(delivery_address) LIKE '%أبها%' THEN 'أبها'
+                        WHEN LOWER(delivery_address) LIKE '%تبوك%' THEN 'تبوك'
+                        WHEN LOWER(delivery_address) LIKE '%جازان%' THEN 'جازان'
+                        WHEN LOWER(delivery_address) LIKE '%نجران%' THEN 'نجران'
+                        WHEN LOWER(delivery_address) LIKE '%حائل%' THEN 'حائل'
+                        WHEN LOWER(delivery_address) LIKE '%القصيم%' OR LOWER(delivery_address) LIKE '%بريدة%' THEN 'القصيم'
+                        ELSE SUBSTR(delivery_address, 1, 50)  -- First 50 characters for other addresses
+                    END as city,
                     customer_name,
                     SUM(CASE WHEN subtotal_incl IS NOT NULL THEN subtotal_incl ELSE 0 END) as total_revenue,
                     COUNT(*) as total_orders
                 FROM `{PROJECT_ID}.{DATASET_ID}.pos_order_lines`
-                WHERE customer_name IS NOT NULL 
-                AND customer_name != ''
-                AND subtotal_incl > 0
+                WHERE {where_clause}
                 GROUP BY city, customer_name
             )
             SELECT 
@@ -293,91 +444,38 @@ def customers_by_city():
         print(f"❌ Error in customers by city: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-@customers_bp.route('/api/customer-segments')
-def customer_segments():
-    """تقسيم العملاء إلى شرائح حسب قيمة الشراء"""
-    try:
-        PROJECT_ID = get_project_id()
-        DATASET_ID = get_dataset_id()
-        
-        segments_query = f"""
-            WITH CustomerTotals AS (
-                SELECT 
-                    phone_number,
-                    customer_name,
-                    SUM(CASE WHEN subtotal_incl IS NOT NULL THEN subtotal_incl ELSE 0 END) as total_spent,
-                    COUNT(*) as total_orders
-                FROM `{PROJECT_ID}.{DATASET_ID}.pos_order_lines`
-                WHERE phone_number IS NOT NULL 
-                AND phone_number != ''
-                AND subtotal_incl > 0
-                GROUP BY phone_number, customer_name
-            ),
-            CustomerSegments AS (
-                SELECT 
-                    phone_number,
-                    customer_name,
-                    total_spent,
-                    total_orders,
-                    CASE 
-                        WHEN total_spent >= 10000 THEN 'VIP - عملاء مميزون'
-                        WHEN total_spent >= 5000 THEN 'ذهبي - عملاء مهمون'
-                        WHEN total_spent >= 1000 THEN 'فضي - عملاء منتظمون'
-                        ELSE 'برونزي - عملاء جدد'
-                    END as segment
-                FROM CustomerTotals
-            )
-            SELECT 
-                segment,
-                COUNT(*) as customer_count,
-                SUM(total_spent) as segment_revenue,
-                AVG(total_spent) as avg_customer_value,
-                SUM(total_orders) as segment_orders
-            FROM CustomerSegments
-            GROUP BY segment
-            ORDER BY segment_revenue DESC
-        """
-        
-        results = list(run_query(segments_query))
-        
-        segments_data = []
-        total_customers = 0
-        total_revenue = 0
-        
-        # First pass: calculate totals
-        for row in results:
-            total_customers += int(row.customer_count or 0)
-            total_revenue += float(row.segment_revenue or 0)
-        
-        # Second pass: build response data
-        for row in results:
-            customer_count = int(row.customer_count or 0)
-            segment_revenue = float(row.segment_revenue or 0)
-            
-            segments_data.append({
-                "segment": row.segment or 'غير محدد',
-                "customer_count": customer_count,
-                "segment_revenue": f"{segment_revenue:,.2f}",
-                "avg_customer_value": f"{float(row.avg_customer_value or 0):,.2f}",
-                "segment_orders": int(row.segment_orders or 0),
-                "customer_percentage": round((customer_count / total_customers * 100), 1) if total_customers > 0 else 0,
-                "revenue_percentage": round((segment_revenue / total_revenue * 100), 1) if total_revenue > 0 else 0
-            })
-            
-        return jsonify({"status": "success", "data": segments_data})
-        
-    except Exception as e:
-        print(f"❌ Error in customer segments: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"status": "error", "message": str(e)}), 500
-
 @customers_bp.route('/api/monthly-customer-trends')
 def monthly_customer_trends():
     """اتجاهات العملاء الشهرية"""
     try:
+        # استقبال الفلاتر
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        branch = request.args.get('branch')
+        
         PROJECT_ID = get_project_id()
         DATASET_ID = get_dataset_id()
+        
+        # بناء شروط WHERE
+        where_conditions = [
+            "customer_name IS NOT NULL",
+            "customer_name != ''",
+            "subtotal_incl > 0",
+            "phone_number NOT IN ('0555555555', '0500000000', 'رفض العميل', '0000000000', '1111111111')"
+        ]
+        
+        # إضافة فلتر التاريخ الافتراضي (آخر 12 شهر) أو المخصص
+        if start_date:
+            where_conditions.append(f"order_date >= '{start_date}'")
+        else:
+            where_conditions.append("order_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)")
+            
+        if end_date:
+            where_conditions.append(f"order_date <= '{end_date}'")
+        if branch:
+            where_conditions.append(f"delivery_address LIKE '%{branch}%'")
+        
+        where_clause = " AND ".join(where_conditions)
         
         trends_query = f"""
             WITH MonthlyStats AS (
@@ -388,10 +486,7 @@ def monthly_customer_trends():
                     COUNT(*) as total_orders,
                     SUM(CASE WHEN subtotal_incl IS NOT NULL THEN subtotal_incl ELSE 0 END) as total_revenue
                 FROM `{PROJECT_ID}.{DATASET_ID}.pos_order_lines`
-                WHERE customer_name IS NOT NULL 
-                AND customer_name != ''
-                AND subtotal_incl > 0
-                AND order_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)
+                WHERE {where_clause}
                 GROUP BY year, month
             )
             SELECT 

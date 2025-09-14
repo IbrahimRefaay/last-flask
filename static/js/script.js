@@ -327,9 +327,11 @@ function fetchKPIs(queryString) {
                     const isReturns = key.includes('مرتجعات') || key.includes('المرتجعات');
                     const valueClass = isReturns ? 'kpi-value returns-value' : 'kpi-value';
                     
-                    // جعل كارت الخدمات قابل للنقر
+                    // جعل كارت الخدمات والعملاء قابل للنقر
                     if (key === "قيمة الخدمات" || key === "مرتجعات الخدمات") {
                         html += `<div class="kpi-card clickable-kpi" onclick="goToServicesPage()" title="انقر لعرض تفاصيل الخدمات"><div class="kpi-title"><i class="${iconClass}"></i> ${key}</div><div class="${valueClass}">${value}</div></div>`;
+                    } else if (key === "عدد العملاء") {
+                        html += `<div class="kpi-card clickable-kpi" onclick="goToCustomersAnalytics()" title="انقر لعرض تحليل العملاء التفصيلي"><div class="kpi-title"><i class="${iconClass}"></i> ${key}</div><div class="${valueClass}">${value}</div></div>`;
                     } else {
                         html += `<div class="kpi-card"><div class="kpi-title"><i class="${iconClass}"></i> ${key}</div><div class="${valueClass}">${value}</div></div>`;
                     }
@@ -780,4 +782,21 @@ function goToServicesPage() {
     
     const servicesUrl = `/services${params.toString() ? '?' + params.toString() : ''}`;
     window.location.href = servicesUrl;
+}
+
+// دالة الانتقال لصفحة تحليل العملاء مع الاحتفاظ بالفلاتر
+function goToCustomersAnalytics() {
+    // الحصول على الفلاتر الحالية
+    const fromDate = document.getElementById('fromDate')?.value || '';
+    const toDate = document.getElementById('toDate')?.value || '';
+    const branchFilter = document.getElementById('branchFilter')?.value || '';
+    
+    // إنشاء URL parameters 
+    const params = new URLSearchParams();
+    if (fromDate) params.append('from_date', fromDate);
+    if (toDate) params.append('to_date', toDate);
+    if (branchFilter) params.append('branch', branchFilter);
+    
+    const customersUrl = `/customers-analytics${params.toString() ? '?' + params.toString() : ''}`;
+    window.location.href = customersUrl;
 }
