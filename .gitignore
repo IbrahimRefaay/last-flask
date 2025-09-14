@@ -7,3 +7,5 @@ spartan-cedar-467808-p9-dda96452a885.json
 .env.example
 
 .github/workflows/stock-update.yml
+
+GITHUB_SECRETS_VALUES.md
