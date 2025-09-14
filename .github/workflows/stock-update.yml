@@ -39,7 +39,7 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
         
@@ -69,6 +69,16 @@ jobs:
         echo "script_name=$SCRIPT" >> $GITHUB_OUTPUT
         echo "Will run: $SCRIPT"
         
+    - name: Verify script exists
+      run: |
+        if [ ! -f "data-push/${{ steps.script.outputs.script_name }}" ]; then
+          echo "❌ Script data-push/${{ steps.script.outputs.script_name }} not found!"
+          echo "Available scripts:"
+          ls -la data-push/*.py || echo "No Python scripts found in data-push/"
+          exit 1
+        fi
+        echo "✅ Script data-push/${{ steps.script.outputs.script_name }} found"
+        
     - name: Run stock update
       run: |
         cd data-push
@@ -79,11 +89,14 @@ jobs:
         
     - name: Notify Flask application
       if: success()
+      env:
+        WEBHOOK_URL: ${{ secrets.APP_WEBHOOK_URL }}
+        UPDATE_TOKEN: ${{ secrets.STOCK_UPDATE_TOKEN }}
       run: |
-        if [ -n "${{ secrets.APP_WEBHOOK_URL }}" ] && [ -n "${{ secrets.STOCK_UPDATE_TOKEN }}" ]; then
+        if [ -n "$WEBHOOK_URL" ] && [ -n "$UPDATE_TOKEN" ]; then
           echo "Notifying Flask application..."
-          curl -X POST "${{ secrets.APP_WEBHOOK_URL }}/api/trigger-stock-update" \
-            -H "Authorization: Bearer ${{ secrets.STOCK_UPDATE_TOKEN }}" \
+          curl -X POST "$WEBHOOK_URL/api/trigger-stock-update" \
+            -H "Authorization: Bearer $UPDATE_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"source\": \"github-actions\", \"script\": \"${{ steps.script.outputs.script_name }}\", \"timestamp\": \"$(date -Iseconds)\"}" \
             --max-time 30 \
@@ -94,7 +107,7 @@ jobs:
         
     - name: Upload logs (if failed)
       if: failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: error-logs
         path: |
